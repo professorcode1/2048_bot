@@ -9,9 +9,6 @@ from selenium.webdriver.support.expected_conditions import presence_of_element_l
 from selenium.webdriver.common.action_chains import ActionChains
 
 
-depth_of_expectimax = 6
-
-
 def print_board(board):
     for i in range(4):
         print(board[i])
@@ -104,13 +101,53 @@ class Node:
         self.children = []
 
     def create_children_from_player_moves(self):
-        print_board(create_up_board(self.board))
-        print_board(create_left_board(self.board))
-        print_board(create_right_board(self.board))
-        print_board(create_down_board(self.board))
+        assert (not len(self.children)), "create children method called on a node which already has children"
+        up_board = create_up_board(self.board)
+        if up_board == self.board:
+            self.children.append(None)
+        else:
+            self.children.append(Node(up_board))
 
+        right_board = create_right_board(self.board)
+        if right_board == self.board:
+            self.children.append(None)
+        else:
+            self.children.append(Node(right_board))
 
+        down_board = create_down_board(self.board)
+        if down_board == self.board:
+            self.children.append(None)
+        else:
+            self.children.append(Node(down_board))
 
+        left_board = create_left_board(self.board)
+        if left_board == self.board:
+            self.children.append(None)
+        else:
+            self.children.append(Node(left_board))
+
+    def create_children_from_game_moves(self):
+        assert (not len(self.children)), "create children method called on a node which already has children"
+        for i in range(4):
+            for j in range(4):
+                if not self.board[i][j]:
+                    create_2_board = deepcopy(self.board)
+                    create_2_board[i][j] = 1
+                    self.children.append(Node(create_2_board))
+
+                    create_4_board = deepcopy(self.board)
+                    create_4_board[i][j] = 2
+                    self.children.append(Node(create_4_board))
+
+    def increment_depth(self, depth):
+        if depth <= 0:
+            return
+        self.create_children_from_player_moves()
+        for player_move_child in self.children:
+            if player_move_child:
+                player_move_child.create_children_from_game_moves()
+                for game_move_child in player_move_child.children:
+                    game_move_child.increment_depth(depth-2)
 # The nodes which have the players turn next will have 4 children in the Order of UP,Right,Down,left
 # The nodes which have the games turn will have anywhere b/w 2-30 children. The children will be created by
 # transversing the board in a row major order and appending two children for each empty spot, one child for if that
@@ -118,12 +155,12 @@ class Node:
 
 
 class Tree:  # The tree will have the property that leaf nodes are always board states that have the players turn
-    def __init__(self, board, depth):
+    depth_of_expectimax = 6
+
+    def __init__(self, board):
         self.root = Node(board)
         assert(not lost(board)), "Cannot initialise a state-space tree with a board that has already lost"
-        assert (not depth % 2), "cannot initialise a tree with odd depth"
-        self.root.create_children_from_player_moves()
-
+        self.root.increment_depth(Tree.depth_of_expectimax)
 
 
 def get_board(drive_window_):
@@ -180,13 +217,19 @@ def lost(board):
 
 
 def play():
-    assert (not depth_of_expectimax % 2), "depth_of_expectimax must be even"
+    yo = []
+    yo.append(None)
+    yo.append(True)
+    print(yo,len(yo),yo[0],yo[1])
+    for i in yo:
+        print(i)
+    return
     with webdriver.Firefox() as driver:
         driver.get("https://2048game.com/")
         action = ActionChains(driver)
         time.sleep(10)  # wait for the js to take effect and make the game appear
         board = get_board(driver)
-        state_space_tree = Tree(board, depth_of_expectimax)
+        state_space_tree = Tree(board)
         time.sleep(500)
         # keep-playing-button , this is gonna be the class of the anchor tag , clicking on which will continue the game
 
