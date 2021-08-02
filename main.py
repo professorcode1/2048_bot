@@ -10,6 +10,7 @@ from selenium.webdriver.support.expected_conditions import presence_of_element_l
 from selenium.webdriver.common.action_chains import ActionChains
 minimum_fitness = 0
 
+
 def print_board(board):
     for i in range(4):
         print(board[i])
@@ -97,10 +98,11 @@ def create_down_board(board):
 
 
 class Node:
-    def __init__(self, board, next_turn_player):
+    def __init__(self, board, next_turn_player, parent):
         self.board = board
         self.children = []
         self.next_turn_player = next_turn_player # will be true is this board state is created by a game move. So this will be set true for all leaf's and root
+        self.parent = parent
 
     def create_children_from_player_moves(self):
         assert (not len(self.children)), "create children method called on a node which already has children"
@@ -108,25 +110,25 @@ class Node:
         if up_board == self.board:
             self.children.append(None)
         else:
-            self.children.append(Node(up_board, False))
+            self.children.append(Node(up_board, False, self))
 
         right_board = create_right_board(self.board)
         if right_board == self.board:
             self.children.append(None)
         else:
-            self.children.append(Node(right_board, False))
+            self.children.append(Node(right_board, False, self))
 
         down_board = create_down_board(self.board)
         if down_board == self.board:
             self.children.append(None)
         else:
-            self.children.append(Node(down_board, False))
+            self.children.append(Node(down_board, False, self))
 
         left_board = create_left_board(self.board)
         if left_board == self.board:
             self.children.append(None)
         else:
-            self.children.append(Node(left_board, False))
+            self.children.append(Node(left_board, False, self))
 
     def create_children_from_game_moves(self):
         assert (not len(self.children)), "create children method called on a node which already has children"
@@ -135,11 +137,11 @@ class Node:
                 if not self.board[i][j]:
                     create_2_board = deepcopy(self.board)
                     create_2_board[i][j] = 1
-                    self.children.append(Node(create_2_board, True))
+                    self.children.append(Node(create_2_board, True, self))
 
                     create_4_board = deepcopy(self.board)
                     create_4_board[i][j] = 2
-                    self.children.append(Node(create_4_board, True))
+                    self.children.append(Node(create_4_board, True, self))
 
     def increment_depth(self, depth):
         if depth <= 0:
@@ -180,7 +182,7 @@ class Node:
 
     def fitness_heuristic(self):
         if lost(self.board):
-            return 0
+            return minimum_fitness
         return random.random() # The fitness value has to be in [0,1] for expectimax to work
 # The nodes which have the players turn next will have 4 children in the Order of UP,Right,Down,left
 # The nodes which have the games turn will have anywhere b/w 2-30 children. The children will be created by
@@ -189,12 +191,17 @@ class Node:
 
 
 class Tree:  # The tree will have the property that leaf nodes are always board states that have the players turn
-    depth_of_expectimax = 6
+    depth_of_expectimax = 4
 
     def __init__(self, board):
-        self.root = Node(board, True)
+        self.root = Node(board, True, None)
         assert(not lost(board)), "Cannot initialise a state-space tree with a board that has already lost"
         self.root.increment_depth(Tree.depth_of_expectimax)
+        all_zeros = True
+        for i in range(4):
+            for j in range(4):
+                all_zeros = all_zeros or board[i][j] == 0
+        assert all_zeros, "This board has all zeros"
 
     def move_to_make(self):
         fitness_up = minimum_fitness
@@ -220,6 +227,43 @@ class Tree:  # The tree will have the property that leaf nodes are always board 
         if max_fitness == fitness_left:
             return "LEFT"
 
+    def game_move_update(self, new_board, move):
+        if move == "UP":
+            player_board = self.root.children[0]
+        elif move == "RIGHT":
+            player_board = self.root.children[1]
+        elif move == "DOWN":
+            player_board = self.root.children[2]
+        elif move == "LEFT":
+            player_board = self.root.children[3]
+        else:
+            raise Exception("The move is not any of the four directions")
+        new_root = None
+        for player_board_children_itrt in player_board.children:
+            if player_board_children_itrt:
+                if player_board_children_itrt.board == new_board:
+                    new_root = player_board_children_itrt
+                    break
+        if not new_root:
+            print_board(player_board.board)
+            for player_board_children_itrt in player_board.children:
+                print_board(player_board_children_itrt.board)
+            input("The assert error is gonna trigger")
+        assert new_root, "The board that the game is in, is absent from the state space tree"
+        self.root = new_root
+        self.root.parent = None
+        self.bfs_and_increment(self.root)
+
+    def bfs_and_increment(self, node):
+        if node is None:
+            return
+        if len(node.children):
+            for child_node in node.children:
+                self.bfs_and_increment(child_node)
+        else:
+            node.increment_depth(2)
+        # find all the leaf nodes, expand state space tree by one more(player and game)
+
 
 def get_board(drive_window_):
     board = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
@@ -235,31 +279,31 @@ def get_board(drive_window_):
 
 
 def up_action(action):
+    print("Up action called")
     action.key_down(Keys.ARROW_UP)
     action.key_up(Keys.ARROW_UP)
     action.perform()
-    return time.time()
 
 
 def left_action(action):
+    print("Left action called")
     action.key_down(Keys.ARROW_LEFT)
     action.key_up(Keys.ARROW_LEFT)
     action.perform()
-    return time.time()
 
 
 def right_action(action):
+    print("Right action called")
     action.key_down(Keys.ARROW_RIGHT)
     action.key_up(Keys.ARROW_RIGHT)
     action.perform()
-    return time.time()
 
 
 def down_action(action):
+    print("Down action called")
     action.key_down(Keys.ARROW_DOWN)
     action.key_up(Keys.ARROW_DOWN)
     action.perform()
-    return time.time()
 
 
 def lost(board):
@@ -277,12 +321,28 @@ def lost(board):
 def play():
     with webdriver.Firefox() as driver:
         driver.get("https://2048game.com/")
-        action = ActionChains(driver)
-        time.sleep(10)  # wait for the js to take effect and make the game appear
+        time.sleep(2)  # wait for the js to take effect and make the game appear
         board = get_board(driver)
         state_space_tree = Tree(board)
-        print(state_space_tree.move_to_make())
-
+        while True:
+            action = ActionChains(driver)
+            move = state_space_tree.move_to_make()
+            if move == "UP":
+                up_action(action)
+            elif move == "RIGHT":
+                right_action(action)
+            elif move == "DOWN":
+                down_action(action)
+            elif move == "LEFT":
+                left_action(action)
+            else:
+                raise Exception("The move is not any of the four directions")
+            time.sleep(1) # wait for the move animation to play out and the webpage to get updated
+            new_board = get_board(driver)
+            if lost(new_board):
+                break
+            state_space_tree.game_move_update(new_board, move)
+        print("Game Over")
         # keep-playing-button , this is gonna be the class of the anchor tag , clicking on which will continue the game
 
 
