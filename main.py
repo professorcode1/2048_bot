@@ -171,19 +171,121 @@ class Node:
                 fitness_left = self.children[3].evaluate_fitness()
             return max(fitness_up, fitness_left, fitness_down, fitness_right)
         else:
-            probability_ = 20 / (11 * len(self.children))
             total_fitness = 0
+            #worst_move_fitness = self.children[0].evaluate_fitness()
             for i in range(len(self.children)):
+                # if self.children[i].evaluate_fitness() < worst_move_fitness:
+                #     worst_move_fitness = self.children[i].evaluate_fitness()
                 if i%2:
-                    total_fitness += self.children[i].evaluate_fitness() / 10
+                   total_fitness += self.children[i].evaluate_fitness() / 10
                 else:
-                    total_fitness += self.children[i].evaluate_fitness()
-            return probability_ * total_fitness
+                  total_fitness += (9 * self.children[i].evaluate_fitness()) / 10
+            return total_fitness / len(self.children)
+            #return worst_move_fitness
+
+    def monotonicity_measure(self):
+        best = -1
+        for i in range(4):
+            current = 0
+            for row in range(4):
+                for column in range(3):
+                    if self.board[row][column] >= self.board[row][column + 1]:
+                        current += 1
+            for column in range(4):
+                for row in range(3):
+                    if self.board[row][column] >= self.board[row + 1][column]:
+                        current += 1
+            if current > best:
+                best = current
+            old_board = deepcopy(self.board)
+            self.board[0][0] = old_board[3][0]
+            self.board[0][1] = old_board[2][0]
+            self.board[0][2] = old_board[1][0]
+            self.board[0][3] = old_board[0][0]
+
+            self.board[1][0] = old_board[3][1]
+            self.board[1][1] = old_board[2][1]
+            self.board[1][2] = old_board[1][1]
+            self.board[1][3] = old_board[0][1]
+
+            self.board[2][0] = old_board[3][2]
+            self.board[2][1] = old_board[2][2]
+            self.board[2][2] = old_board[1][2]
+            self.board[2][3] = old_board[0][2]
+
+            self.board[3][0] = old_board[3][3]
+            self.board[3][1] = old_board[2][3]
+            self.board[3][2] = old_board[1][3]
+            self.board[3][3] = old_board[0][3]
+        return best
+
+    def empty_measure(self):
+        zero_count = 0
+        for row in range(4):
+            for col in range(4):
+                if not self.board[row][col]:
+                    zero_count += 1
+        return zero_count
 
     def fitness_heuristic(self):
-        if lost(self.board):
-            return minimum_fitness
-        return random.random() # The fitness value has to be in [0,1] for expectimax to work
+        return self.monotonicity_measure() + 1.2 * self.empty_measure() - self.cluter_heurisitc()
+        return self.patter_heuristic() * (2.7 + self.empty_measure())
+        return self.patter_heuristic() - self.cluter_heurisitc() + \
+               (self.monotonicity_measure() * (2.75 + self.empty_measure()))
+
+    def cluter_heurisitc(self):
+        penalty = 0
+        for i in range(4):
+            for j in range(4):
+                if i < 3:
+                    penalty += abs(self.board[i][j] - self.board[i+1][j])
+                if j < 3:
+                    penalty += abs(self.board[i][j] - self.board[i][j+1])
+        return penalty - 544
+
+    def patter_heuristic(self):
+        weight_mat = [[0, 0, 0, 3], [0, 0, 3, 5], [0, 3, 5, 15], [3, 5, 15, 30]]
+        weight_mat = [[17, 16, 15, 14], [13, 12, 11, 10], [9, 8, 7, 6], [5, 4, 3, 2]]
+        val = 0
+        for i in range(4):
+            for j in range(4):
+                val += weight_mat[i][j] * weight_mat[i][j] * self.board[i][j]
+        return val
+
+    def big_number_not_on_corners(self):
+        penalty = 1
+        # count_penalty_after = 4
+        # if self.board[1][1] <= count_penalty_after:
+        #     penalty += self.board[1][1]
+        # if self.board[2][1] <= count_penalty_after:
+        #     penalty += self.board[2][1]
+        # if self.board[1][2] <= count_penalty_after:
+        #     penalty += self.board[1][2]
+        # if self.board[2][2] <= count_penalty_after:
+        #     penalty += self.board[2][2]
+        #
+        # if self.board[0][1] <= count_penalty_after:
+        #     penalty += self.board[0][1]/2
+        # if self.board[0][2] <= count_penalty_after:
+        #     penalty += self.board[0][2]/2
+        # if self.board[1][0] <= count_penalty_after:
+        #     penalty += self.board[1][0]/2
+        # if self.board[2][0] <= count_penalty_after:
+        #     penalty += self.board[2][0]/2
+        # if self.board[3][1] <= count_penalty_after:
+        #     penalty += self.board[3][1]/2
+        # if self.board[3][2] <= count_penalty_after:
+        #     penalty += self.board[3][2]/2
+        # if self.board[1][3] <= count_penalty_after:
+        #     penalty += self.board[1][3]/2
+        # if self.board[2][3] <= count_penalty_after:
+        #     penalty += self.board[2][3]/2
+        penalty_matrix = [[0, 0, 1, 3], [0, 1, 3, 5], [1, 3, 5, 15], [3, 5, 15, 30]]
+        for i in range(4):
+            for j in range(4):
+                if self.board[i][j] <4:
+                    penalty += (4 - self.board[i][j]) * penalty_matrix[i][j]
+        return penalty - 360
 # The nodes which have the players turn next will have 4 children in the Order of UP,Right,Down,left
 # The nodes which have the games turn will have anywhere b/w 2-30 children. The children will be created by
 # transversing the board in a row major order and appending two children for each empty spot, one child for if that
@@ -191,7 +293,10 @@ class Node:
 
 
 class Tree:  # The tree will have the property that leaf nodes are always board states that have the players turn
-    depth_of_expectimax = 4
+    depth_of_expectimax = 2
+    _2048_achieved = False
+    _512_achieved = False
+    _128_achieved = False # will keep increasing depth by 2 as bigger and bigger numbers are achieved
 
     def __init__(self, board):
         self.root = Node(board, True, None)
@@ -218,13 +323,13 @@ class Tree:  # The tree will have the property that leaf nodes are always board 
             fitness_left = self.root.children[3].evaluate_fitness()
         max_fitness = max(fitness_up, fitness_left, fitness_down, fitness_right)
         print(fitness_up,  fitness_right, fitness_down, fitness_left)
-        if max_fitness == fitness_up:
+        if max_fitness == fitness_up and self.root.children[0]:
             return "UP"
-        if max_fitness == fitness_right:
+        if max_fitness == fitness_right and self.root.children[1]:
             return "RIGHT"
-        if max_fitness == fitness_down:
+        if max_fitness == fitness_down  and self.root.children[2]:
             return "DOWN"
-        if max_fitness == fitness_left:
+        if max_fitness == fitness_left  and self.root.children[3]:
             return "LEFT"
 
     def game_move_update(self, new_board, move):
@@ -252,16 +357,84 @@ class Tree:  # The tree will have the property that leaf nodes are always board 
         assert new_root, "The board that the game is in, is absent from the state space tree"
         self.root = new_root
         self.root.parent = None
-        self.bfs_and_increment(self.root)
+        _2048 = False
+        _512 = False
+        _128 = False
+        for row in range(4):
+            for col in range(4):
+                if self.root.board[row][col] == 7:
+                    _128 = True
+                elif self.root.board[row][col] == 9:
+                    _512 = True
+                elif self.root.board[row][col] == 11:
+                    _2048 = True
 
-    def bfs_and_increment(self, node):
+        if _128 and not self._128_achieved :
+            self._128_achieved = True
+            self.bfs_and_increment(self.root, 4)
+            Tree.depth_of_expectimax = 4
+        elif _512 and not self._512_achieved:
+            self._512_achieved = True
+            self.bfs_and_increment(self.root, 4)
+            Tree.depth_of_expectimax = 6
+        elif _2048 and not self._2048_achieved:
+            self._2048_achieved = True
+            self.bfs_and_increment(self.root, 4)
+            Tree.depth_of_expectimax = 8
+        else:
+            self.bfs_and_increment(self.root, 2)
+
+    def bfs_and_increment(self, node, depth):
         if node is None:
             return
         if len(node.children):
             for child_node in node.children:
-                self.bfs_and_increment(child_node)
+                self.bfs_and_increment(child_node, depth)
         else:
-            node.increment_depth(2)
+
+            # 1 Gear version
+            node.increment_depth(depth)
+
+            # 2 GEAR VERSION
+            # if Tree.depth_of_expectimax == 4:
+            #     if self.root.empty_measure() <=4 :
+            #         node.increment_depth(4)
+            #         Tree.depth_of_expectimax = 6
+            #     else:
+            #         node.increment_depth(2)
+            # elif Tree.depth_of_expectimax == 6:
+            #     if self.root.empty_measure() <= 4:
+            #         node.increment_depth(2)
+            #     else:
+            #         Tree.depth_of_expectimax = 4
+            # else:
+            #     raise Exception("State Space Tree does not have a depth of 4,6 or 8")
+
+            # 4 GEAR VERSION
+            # if Tree.depth_of_expectimax == 4:
+            #     if self.root.empty_measure() <=4 :
+            #         node.increment_depth(6)
+            #         Tree.depth_of_expectimax = 8
+            #     elif self.root.empty_measure() <=8:
+            #         node.increment_depth(4)
+            #         Tree.depth_of_expectimax = 6
+            #     else:
+            #         node.increment_depth(2)
+            # elif Tree.depth_of_expectimax == 6:
+            #     if self.root.empty_measure() <=4:
+            #         node.increment_depth(4)
+            #         Tree.depth_of_expectimax = 8
+            #     elif self.root.empty_measure() <= 8:
+            #         node.increment_depth(2)
+            #     else:
+            #         Tree.depth_of_expectimax = 4
+            # elif Tree.depth_of_expectimax == 8:
+            #     if self.root.empty_measure() <= 4:
+            #         node.increment_depth(2)
+            #     else:
+            #         Tree.depth_of_expectimax = 6
+            # else:
+            #     raise Exception("State Space Tree does not have a depth of 4,6 or 8")
         # find all the leaf nodes, expand state space tree by one more(player and game)
 
 
@@ -315,6 +488,10 @@ def lost(board):
         for j in range(4):
             if board[i][j] == board[i+1][j]:
                 return False
+    for i in range(4):
+        for j in range(4):
+            if not board[i][j]:
+                return False;
     return True
 
 
@@ -324,6 +501,7 @@ def play():
         time.sleep(2)  # wait for the js to take effect and make the game appear
         board = get_board(driver)
         state_space_tree = Tree(board)
+        got_2048 = False
         while True:
             action = ActionChains(driver)
             move = state_space_tree.move_to_make()
@@ -337,13 +515,22 @@ def play():
                 left_action(action)
             else:
                 raise Exception("The move is not any of the four directions")
-            time.sleep(1) # wait for the move animation to play out and the webpage to get updated
+            time.sleep(0.15) # wait for the move animation to play out and the webpage to get updated
             new_board = get_board(driver)
             if lost(new_board):
                 break
+            if not got_2048:
+                for i in range(4):
+                    for j in range(4):
+                        if new_board[i][j] == 11:
+                            time.sleep(3)
+                            anchor_to_continue = driver.find_elements_by_class_name("keep-playing-button")
+                            anchor_to_continue[0].click()
+                            got_2048 = True
             state_space_tree.game_move_update(new_board, move)
         print("Game Over")
-        # keep-playing-button , this is gonna be the class of the anchor tag , clicking on which will continue the game
+        time.sleep(20)
+        #  , this is gonna be the class of the anchor tag , clicking on which will continue the game
 
 
 if __name__ != "__main__":
